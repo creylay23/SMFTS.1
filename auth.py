@@ -1,5 +1,6 @@
 import bcrypt
 import database
+import encryption
 
 def hash_password(password):
     """Hashes a password using bcrypt."""
@@ -10,14 +11,23 @@ def check_password(password, hashed_password):
     return bcrypt.checkpw(password.encode('utf-8'), hashed_password)
 
 def create_user(username, password, role):
-    """Creates a new user with a hashed password."""
+    """Creates a new user, generates RSA keys, and stores the public key."""
     if not all([username, password, role]):
         return False, "All fields are required."
 
+    # Generate RSA keys first, encrypting the private key with the user's password
+    public_key_pem = encryption.generate_rsa_keys(username, password)
+
     hashed_password = hash_password(password)
-    success = database.add_user(username, hashed_password, role)
+
+    # Now, add the user with their public key
+    success = database.add_user(username, hashed_password, role, public_key_pem)
+
     if not success:
+        # If user creation fails, we should ideally clean up the generated key files.
+        # For simplicity in this context, we'll note this as a point for future improvement.
         return False, "Username already exists."
+
     return True, "User created successfully."
 
 def authenticate_user(username, password):

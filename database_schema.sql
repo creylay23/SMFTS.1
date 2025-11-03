@@ -1,18 +1,36 @@
 -- database_schema.sql
 
--- This script defines the database schema for the Secure File and Message Transfer System.
--- It creates a 'users' table to store user credentials and roles.
-
--- Drop the table if it already exists to ensure a clean setup
 DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS secure_messages;
+DROP TABLE IF EXISTS secure_files;
 
--- Create the 'users' table
 CREATE TABLE users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
-    role TEXT NOT NULL CHECK(role IN ('Admin', 'Doctor', 'Nurse'))
+    role TEXT NOT NULL CHECK(role IN ('Admin', 'Doctor', 'Nurse')),
+    public_key TEXT NOT NULL
 );
 
--- Note: The password_hash column will store passwords hashed with bcrypt.
--- The role column is restricted to the three specified roles.
+CREATE TABLE secure_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sender_username TEXT NOT NULL,
+    recipient_username TEXT NOT NULL,
+    encrypted_message BLOB NOT NULL,
+    encrypted_session_key BLOB NOT NULL,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (sender_username) REFERENCES users(username),
+    FOREIGN KEY (recipient_username) REFERENCES users(username)
+);
+
+CREATE TABLE secure_files (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sender_username TEXT NOT NULL,
+    recipient_username TEXT NOT NULL,
+    filename TEXT NOT NULL,
+    encrypted_file BLOB NOT NULL,
+    encrypted_session_key BLOB NOT NULL,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (sender_username) REFERENCES users(username),
+    FOREIGN KEY (recipient_username) REFERENCES users(username)
+);
