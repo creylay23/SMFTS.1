@@ -10,6 +10,8 @@ This file tracks tasks, responsibilities, and checkpoints for the project. It co
 
 • 	Windows desktop only 
 
+• 	No accounts, no sign-ins, no backups
+
 • 	Messages must always stay encrypted 
 
 • 	Push to GitHub at phase milestones and after stable test passes 
@@ -30,13 +32,13 @@ This file tracks tasks, responsibilities, and checkpoints for the project. It co
 
 Tasks 
 
-• 	[x] Create initial folder structure (, , )
+• 	[ ] Create initial folder structure (, , )
 
-• 	[x] Draft , , and
+• 	[ ] Draft , , and
 
-• 	[x] Configure  (exclude keys, logs, build artifacts)
+• 	[ ] Configure  (exclude keys, logs, build artifacts)
 
-• 	[x] Initialize GitHub repo and first commit
+• 	[ ] Initialize GitHub repo and first commit
 
 Goal: Project skeleton ready for development. 
 

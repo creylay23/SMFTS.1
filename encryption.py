@@ -1,92 +1,139 @@
-# encryption.py
-from Crypto.Cipher import AES
-from Crypto.Protocol.KDF import PBKDF2
+from Crypto.Cipher import AES, PKCS1_OAEP
+from Crypto.PublicKey import RSA
 from Crypto.Random import get_random_bytes
 from Crypto.Util.Padding import pad, unpad
+import hashlib
 import os
 
-# --- Configuration ---
-KEY_SIZE = 32  # 256-bit key
-SALT_SIZE = 16 # 128-bit salt
-PBKDF2_ITERATIONS = 100000 # Number of iterations for key derivation
+# AES key length in bytes (256 bits)
+KEY_LENGTH = 32
+RSA_KEY_LENGTH = 2048
 
-def get_key_from_password(password, salt):
-    """Derives a 256-bit key from a password and salt using PBKDF2."""
-    return PBKDF2(password, salt, dkLen=KEY_SIZE, count=PBKDF2_ITERATIONS)
+def generate_rsa_keys(username, password):
+    """Generates a new RSA key pair and saves the encrypted private key."""
+    key = RSA.generate(RSA_KEY_LENGTH)
 
-def encrypt_text(text, password):
-    """
-    Encrypts a string using a key derived from the password.
-    Returns the salt and the encrypted text.
-    """
-    salt = get_random_bytes(SALT_SIZE)
-    key = get_key_from_password(password.encode('utf-8'), salt)
+    keys_dir = "keys"
+    os.makedirs(keys_dir, exist_ok=True)
 
-    cipher = AES.new(key, AES.MODE_CBC)
-    iv = cipher.iv
+    private_key_path = os.path.join(keys_dir, f"{username}_private.pem")
 
-    encrypted_data = cipher.encrypt(pad(text.encode('utf-8'), AES.block_size))
+    # Encrypt the private key with the user's password
+    encrypted_private_key = key.export_key('PEM', passphrase=password, pkcs=8,
+                                           protection="scryptAndAES128-CBC")
 
-    # Return a single blob: salt + iv + ciphertext
-    return salt + iv + encrypted_data
+    with open(private_key_path, "wb") as f:
+        f.write(encrypted_private_key)
 
-def decrypt_text(encrypted_blob, password):
-    """
-    Decrypts a blob of encrypted data using a key derived from the password.
-    """
+    return key.publickey().export_key('PEM')
+
+def encrypt_with_public_key(data, public_key_pem):
+    """Encrypts data using an RSA public key."""
+    public_key = RSA.import_key(public_key_pem)
+    cipher_rsa = PKCS1_OAEP.new(public_key)
+    encrypted_data = cipher_rsa.encrypt(data)
+    return encrypted_data
+
+def decrypt_with_private_key(data, username, password):
+    """Decrypts data using a user's password-protected RSA private key."""
+    private_key_path = os.path.join("keys", f"{username}_private.pem")
     try:
-        salt = encrypted_blob[:SALT_SIZE]
-        iv = encrypted_blob[SALT_SIZE:SALT_SIZE + 16]
-        ciphertext = encrypted_blob[SALT_SIZE + 16:]
+        with open(private_key_path, "rb") as f:
+            private_key_data = f.read()
 
-        key = get_key_from_password(password.encode('utf-8'), salt)
-        cipher = AES.new(key, AES.MODE_CBC, iv)
-
-        decrypted_data = unpad(cipher.decrypt(ciphertext), AES.block_size)
-        return decrypted_data.decode('utf-8')
-    except (ValueError, KeyError, IndexError):
-        # Errors can occur from incorrect password, corrupted data, or invalid format
+        private_key = RSA.import_key(private_key_data, passphrase=password)
+        cipher_rsa = PKCS1_OAEP.new(private_key)
+        decrypted_data = cipher_rsa.decrypt(data)
+        return decrypted_data
+    except (FileNotFoundError, ValueError, TypeError):
+        # ValueError can be raised if the password is wrong
         return None
 
-def encrypt_file(input_path, output_path, password):
-    """
-    Encrypts a file using a password-derived key.
-    """
-    salt = get_random_bytes(SALT_SIZE)
-    key = get_key_from_password(password.encode('utf-8'), salt)
+def generate_key():
+    """Generates a secure 256-bit (32-byte) AES key."""
+    return get_random_bytes(KEY_LENGTH)
 
+def encrypt_file(input_path, output_path, key):
+    """Encrypts a file using AES-256 in CBC mode."""
     cipher = AES.new(key, AES.MODE_CBC)
     iv = cipher.iv
 
     with open(input_path, 'rb') as f_in:
         plaintext = f_in.read()
 
-    encrypted_data = cipher.encrypt(pad(plaintext, AES.block_size))
+    ciphertext = cipher.encrypt(pad(plaintext, AES.block_size))
 
     with open(output_path, 'wb') as f_out:
-        f_out.write(salt)
         f_out.write(iv)
-        f_out.write(encrypted_data)
+        f_out.write(ciphertext)
 
-def decrypt_file(input_path, output_path, password):
-    """
-    Decrypts a file using a password-derived key.
-    Returns True on success, False on failure.
-    """
+def decrypt_file(input_path, output_path, key):
+    """Decrypts a file encrypted with AES-256 in CBC mode."""
     try:
         with open(input_path, 'rb') as f_in:
-            salt = f_in.read(SALT_SIZE)
             iv = f_in.read(16)
+            # The IV must be 16 bytes long. If not, the file is corrupt or not valid.
+            if len(iv) < 16:
+                return False
             ciphertext = f_in.read()
 
-        key = get_key_from_password(password.encode('utf-8'), salt)
         cipher = AES.new(key, AES.MODE_CBC, iv)
 
-        decrypted_data = unpad(cipher.decrypt(ciphertext), AES.block_size)
+        plaintext = unpad(cipher.decrypt(ciphertext), AES.block_size)
 
         with open(output_path, 'wb') as f_out:
-            f_out.write(decrypted_data)
-
+            f_out.write(plaintext)
         return True
-    except (ValueError, KeyError, FileNotFoundError):
+    except (ValueError, KeyError):
+        # This occurs if the key is incorrect, data is corrupted, or padding is invalid.
         return False
+
+def encrypt_data(data, key):
+    """Encrypts byte data using AES-256 in CBC mode."""
+    cipher = AES.new(key, AES.MODE_CBC)
+    iv = cipher.iv
+    ciphertext = cipher.encrypt(pad(data, AES.block_size))
+    return iv + ciphertext
+
+def decrypt_data(encrypted_data, key):
+    """Decrypts byte data encrypted with AES-256 in CBC mode."""
+    iv = encrypted_data[:16]
+    ciphertext = encrypted_data[16:]
+    cipher = AES.new(key, AES.MODE_CBC, iv)
+    try:
+        decrypted_data = unpad(cipher.decrypt(ciphertext), AES.block_size)
+        return decrypted_data
+    except (ValueError, KeyError):
+        return None
+
+def encrypt_message(message, key):
+    """Encrypts a text message using AES-256."""
+    cipher = AES.new(key, AES.MODE_CBC)
+    iv = cipher.iv
+
+    padded_message = pad(message.encode('utf-8'), AES.block_size)
+    ciphertext = cipher.encrypt(padded_message)
+
+    return iv + ciphertext
+
+def decrypt_message(ciphertext, key):
+    """Decrypts an AES-256 encrypted message."""
+    iv = ciphertext[:16]
+    encrypted_message = ciphertext[16:]
+
+    cipher = AES.new(key, AES.MODE_CBC, iv)
+
+    try:
+        decrypted_message = unpad(cipher.decrypt(encrypted_message), AES.block_size)
+        return decrypted_message.decode('utf-8')
+    except (ValueError, KeyError):
+        return None # Decryption failed
+
+def get_file_hash(filepath):
+    """Calculates the SHA-256 hash of a file."""
+    sha256 = hashlib.sha256()
+    with open(filepath, 'rb') as f:
+        # Read the file in chunks to handle large files
+        for chunk in iter(lambda: f.read(4096), b""):
+            sha256.update(chunk)
+    return sha256.hexdigest()
