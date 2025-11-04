@@ -289,7 +289,19 @@ class App(tk.Tk):
         tk.Button(file_frame, text="Encrypt & Send", command=send_file_action, font=self.button_font).pack(pady=20)
 
 
+def setup_default_users():
+    """Creates the database and default users if they don't exist."""
+    db_exists = os.path.exists(database.DATABASE_FILE)
+    database.create_tables() # This will only create, not destroy
+
+    if not db_exists:
+        print("First run: Creating default users...")
+        auth.create_user("Admin1", "Password1", "Admin")
+        auth.create_user("Doctor1", "Password1", "Doctor")
+        auth.create_user("Nurse1", "Password1", "Nurse")
+        print("Default users created.")
+
 if __name__ == "__main__":
-    database.create_tables()
+    setup_default_users()
     app = App()
     app.mainloop()
