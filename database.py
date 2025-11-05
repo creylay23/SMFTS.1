@@ -1,7 +1,11 @@
 import sqlite3
 import os
 
-DATABASE_FILE = "secure_app.db"
+# --- Path Configuration ---
+# Get the absolute path of the directory where this script is located
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Define the absolute path for the database file
+DATABASE_FILE = os.path.join(BASE_DIR, "secure_app.db")
 
 def get_db_connection():
     """Establishes a connection to the SQLite database."""
@@ -15,7 +19,9 @@ def create_tables():
         return  # Database already exists
 
     conn = get_db_connection()
-    with open('database_schema.sql', 'r') as f:
+    # Define the absolute path for the schema file
+    schema_path = os.path.join(BASE_DIR, 'database_schema.sql')
+    with open(schema_path, 'r') as f:
         conn.executescript(f.read())
     conn.close()
 
